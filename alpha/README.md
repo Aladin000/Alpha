@@ -1,6 +1,8 @@
-# Alpha 
+# Alpha
 
 A modular, efficient, desktop app for personal finance management, trading journal, and open position monitoring.
+I needed one, and here it is.
+
 
 ## Features
 
