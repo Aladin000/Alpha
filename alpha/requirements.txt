@@ -1,0 +1,33 @@
+PySide6
+pyqtgraph
+yfinance
+ccxt
+PyInstaller
+
+# Additional dependencies for enhanced functionality
+matplotlib>=3.7.0
+seaborn>=0.12.0
+openpyxl>=3.1.0
+xlsxwriter>=3.1.0
+python-dateutil>=2.8.0
+scipy>=1.10.0
+plotly>=5.15.0
+
+# For better data handling and validation
+pydantic>=2.0.0
+validators>=0.22.0
+
+# For configuration management
+pyyaml>=6.0
+
+# For better logging and debugging
+loguru>=0.7.0
+
+# For enhanced datetime handling
+arrow>=1.2.0
+
+# For better number formatting and calculations
+babel>=2.12.0
+
+# For async operations (already installed via ccxt but explicit)
+aiofiles>=23.0.0 

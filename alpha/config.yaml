@@ -1,0 +1,98 @@
+# Alpha Personal Finance Application Configuration
+
+# Application Settings
+app:
+  name: "Alpha"
+  version: "1.0.0"
+  debug: false
+  
+# Database Settings
+database:
+  name: "alpha.db"
+  backup_interval_hours: 24
+  max_backups: 10
+
+# Data Sources (for offline/online mode)
+data_sources:
+  # When offline_mode is true, use cached data only
+  offline_mode: false
+  
+  # Cache settings
+  cache_duration_minutes: 15
+  
+  # API settings
+  apis:
+    yfinance:
+      enabled: true
+      timeout_seconds: 30
+    ccxt:
+      enabled: true
+      timeout_seconds: 30
+    alpha_vantage:
+      enabled: false
+      api_key: ""
+
+# UI Settings
+ui:
+  theme: "dark"  # "light" or "dark"
+  window:
+    width: 1400
+    height: 900
+    min_width: 800
+    min_height: 600
+  
+  # Chart settings
+  charts:
+    default_period: "1y"
+    animation_enabled: true
+    grid_enabled: true
+
+# Finance Categories
+finance:
+  expense_categories:
+    - "Food & Dining"
+    - "Transportation"
+    - "Shopping"
+    - "Entertainment"
+    - "Bills & Utilities"
+    - "Healthcare"
+    - "Education"
+    - "Travel"
+    - "Insurance"
+    - "Investments"
+    - "Other"
+  
+  income_categories:
+    - "Salary"
+    - "Freelance"
+    - "Investments"
+    - "Business"
+    - "Other"
+
+# Trading Settings
+trading:
+  supported_assets:
+    - "stocks"
+    - "etfs" 
+    - "crypto"
+    - "forex"
+  
+  default_currency: "USD"
+  
+  # Risk management
+  position_size_warnings:
+    max_position_percent: 20.0
+    max_single_trade_percent: 5.0
+
+# Export Settings
+export:
+  default_format: "xlsx"
+  include_charts: true
+  date_format: "%Y-%m-%d"
+  
+# Logging
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  log_file: "alpha.log"
+  max_file_size_mb: 10
+  backup_count: 5 

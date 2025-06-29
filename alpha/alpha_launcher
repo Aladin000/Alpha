@@ -1,0 +1,35 @@
+#!/bin/bash
+
+# Alpha Personal Finance Application Launcher
+# This script allows running the Alpha app from anywhere by typing 'alpha'
+
+# Set the absolute path to the Alpha application directory
+ALPHA_DIR="/Users/matteo/Desktop/Alpha/alpha"
+
+# Check if the Alpha directory exists
+if [ ! -d "$ALPHA_DIR" ]; then
+    echo "Error: Alpha application directory not found at $ALPHA_DIR"
+    echo "Please check the installation path."
+    exit 1
+fi
+
+# Change to the Alpha directory
+cd "$ALPHA_DIR" || {
+    echo "Error: Could not change to Alpha directory"
+    exit 1
+}
+
+# Check if virtual environment exists
+if [ ! -d "venv" ]; then
+    echo "Error: Virtual environment not found in $ALPHA_DIR"
+    echo "Please ensure the Alpha application is properly installed."
+    exit 1
+fi
+
+# Activate virtual environment and run the application
+echo "Starting Alpha Personal Finance Application..."
+source venv/bin/activate
+python alpha.py
+
+# Deactivate virtual environment when done
+deactivate 
