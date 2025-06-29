@@ -350,6 +350,169 @@ class OpenPositions:
             
         except Exception as e:
             raise PositionsError(f"Failed to generate positions summary: {str(e)}")
+    
+    # ==================== POSITION CRUD OPERATIONS ====================
+    
+    def add_position(self, symbol: str, asset_type: str, entry_date: str, 
+                    entry_price: float, quantity: float) -> int:
+        """
+        Add a new position to the portfolio.
+        
+        Args:
+            symbol (str): Trading symbol (e.g., 'AAPL', 'BTC')
+            asset_type (str): Type of asset (stock, crypto, etf, etc.)
+            entry_date (str): Entry date in YYYY-MM-DD format
+            entry_price (float): Entry price per unit
+            quantity (float): Number of units/shares
+            
+        Returns:
+            int: ID of the newly created position
+            
+        Raises:
+            PositionsError: If validation fails or database operation fails
+        """
+        # Validate inputs
+        if not symbol or not symbol.strip():
+            raise PositionsError("Symbol is required")
+        
+        symbol = symbol.upper().strip()
+        
+        if asset_type.lower() not in self.valid_asset_types:
+            valid_types = ', '.join(sorted(self.valid_asset_types))
+            raise PositionsError(f"Asset type must be one of: {valid_types}")
+        
+        if entry_price <= 0:
+            raise PositionsError("Entry price must be greater than 0")
+        
+        if quantity <= 0:
+            raise PositionsError("Quantity must be greater than 0")
+        
+        # Validate date format
+        try:
+            datetime.strptime(entry_date, '%Y-%m-%d')
+        except ValueError:
+            raise PositionsError("Entry date must be in YYYY-MM-DD format")
+        
+        try:
+            position_id = self.db.add_position(
+                symbol=symbol,
+                asset_type=asset_type.lower(),
+                entry_date=entry_date,
+                entry_price=entry_price,
+                quantity=quantity
+            )
+            
+            logger.info(f"Added position: {symbol} ({asset_type}) - {quantity} @ ${entry_price}")
+            return position_id
+            
+        except Exception as e:
+            raise PositionsError(f"Failed to add position: {str(e)}")
+    
+    def update_position(self, position_id: int, symbol: str = None, asset_type: str = None,
+                       entry_date: str = None, entry_price: float = None, 
+                       quantity: float = None) -> bool:
+        """
+        Update an existing position.
+        
+        Args:
+            position_id (int): ID of the position to update
+            symbol (str, optional): New trading symbol
+            asset_type (str, optional): New asset type
+            entry_date (str, optional): New entry date in YYYY-MM-DD format
+            entry_price (float, optional): New entry price per unit
+            quantity (float, optional): New quantity
+            
+        Returns:
+            bool: True if update was successful
+            
+        Raises:
+            PositionsError: If validation fails or database operation fails
+        """
+        # Check if position exists
+        existing_position = self.get_position(position_id)
+        if not existing_position:
+            raise PositionsError(f"Position with ID {position_id} not found")
+        
+        # Validate inputs if provided
+        if symbol is not None:
+            if not symbol or not symbol.strip():
+                raise PositionsError("Symbol cannot be empty")
+            symbol = symbol.upper().strip()
+        
+        if asset_type is not None:
+            if asset_type.lower() not in self.valid_asset_types:
+                valid_types = ', '.join(sorted(self.valid_asset_types))
+                raise PositionsError(f"Asset type must be one of: {valid_types}")
+            asset_type = asset_type.lower()
+        
+        if entry_price is not None and entry_price <= 0:
+            raise PositionsError("Entry price must be greater than 0")
+        
+        if quantity is not None and quantity <= 0:
+            raise PositionsError("Quantity must be greater than 0")
+        
+        if entry_date is not None:
+            try:
+                datetime.strptime(entry_date, '%Y-%m-%d')
+            except ValueError:
+                raise PositionsError("Entry date must be in YYYY-MM-DD format")
+        
+        try:
+            # Build kwargs for only non-None values
+            update_kwargs = {'position_id': position_id}
+            if symbol is not None:
+                update_kwargs['symbol'] = symbol
+            if asset_type is not None:
+                update_kwargs['asset_type'] = asset_type
+            if entry_date is not None:
+                update_kwargs['entry_date'] = entry_date
+            if entry_price is not None:
+                update_kwargs['entry_price'] = entry_price
+            if quantity is not None:
+                update_kwargs['quantity'] = quantity
+            
+            success = self.db.update_position(**update_kwargs)
+            
+            if success:
+                logger.info(f"Updated position ID {position_id}")
+            else:
+                logger.warning(f"Position ID {position_id} not found for update")
+            
+            return success
+            
+        except Exception as e:
+            raise PositionsError(f"Failed to update position: {str(e)}")
+    
+    def delete_position(self, position_id: int) -> bool:
+        """
+        Delete a position from the portfolio.
+        
+        Args:
+            position_id (int): ID of the position to delete
+            
+        Returns:
+            bool: True if deletion was successful
+            
+        Raises:
+            PositionsError: If database operation fails
+        """
+        # Check if position exists
+        existing_position = self.get_position(position_id)
+        if not existing_position:
+            raise PositionsError(f"Position with ID {position_id} not found")
+        
+        try:
+            success = self.db.delete_position(position_id)
+            
+            if success:
+                logger.info(f"Deleted position ID {position_id} ({existing_position['symbol']})")
+            else:
+                logger.warning(f"Position ID {position_id} not found for deletion")
+            
+            return success
+            
+        except Exception as e:
+            raise PositionsError(f"Failed to delete position: {str(e)}")
 
 
 if __name__ == "__main__":

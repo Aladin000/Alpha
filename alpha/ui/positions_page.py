@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QTabWidget, QGroupBox, 
     QFormLayout, QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox, 
     QTextEdit, QSplitter, QProgressBar, QScrollArea, QMessageBox,
-    QHeaderView, QAbstractItemView, QFrame
+    QHeaderView, QAbstractItemView, QFrame, QDialog
 )
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QFont, QColor
@@ -119,6 +119,27 @@ class PositionsPage(QWidget):
         
         header_layout.addStretch()
         
+        # CRUD buttons
+        self.add_position_btn = QPushButton("Add Position")
+        self.add_position_btn.clicked.connect(self._add_position)
+        header_layout.addWidget(self.add_position_btn)
+        
+        self.edit_position_btn = QPushButton("Edit Position")
+        self.edit_position_btn.clicked.connect(self._edit_position)
+        self.edit_position_btn.setEnabled(False)
+        header_layout.addWidget(self.edit_position_btn)
+        
+        self.delete_position_btn = QPushButton("Delete Position")
+        self.delete_position_btn.clicked.connect(self._delete_position)
+        self.delete_position_btn.setEnabled(False)
+        header_layout.addWidget(self.delete_position_btn)
+        
+        # Separator
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.VLine)
+        separator.setFrameShadow(QFrame.Shadow.Sunken)
+        header_layout.addWidget(separator)
+        
         # Control buttons
         self.refresh_prices_btn = QPushButton("Refresh Prices")
         self.refresh_prices_btn.clicked.connect(self.refresh_live_data)
@@ -172,6 +193,9 @@ class PositionsPage(QWidget):
         self.positions_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.positions_table.setAlternatingRowColors(True)
         self.positions_table.setSortingEnabled(True)
+        
+        # Connect selection changed signal
+        self.positions_table.selectionModel().selectionChanged.connect(self._on_position_selection_changed)
         
         # Table headers
         headers = [
@@ -615,4 +639,333 @@ TOP PERFORMERS (by P&L %):
         """Handle close event to stop auto-refresh timer."""
         if self.refresh_timer.isActive():
             self.refresh_timer.stop()
-        event.accept() 
+        event.accept()
+    
+    # ==================== CRUD METHODS ====================
+    
+    def _on_position_selection_changed(self):
+        """Handle position selection change in table."""
+        selected_rows = self.positions_table.selectionModel().selectedRows()
+        has_selection = len(selected_rows) > 0
+        
+        # Enable/disable edit and delete buttons based on selection
+        self.edit_position_btn.setEnabled(has_selection)
+        self.delete_position_btn.setEnabled(has_selection)
+    
+    def _add_position(self):
+        """Show dialog to add a new position."""
+        if not self.open_positions:
+            QMessageBox.warning(self, "Error", "Open Positions service not available")
+            return
+        
+        dialog = AddPositionDialog(self)
+        if dialog.exec() == QDialog.Accepted:
+            position_data = dialog.get_position_data()
+            
+            try:
+                position_id = self.open_positions.add_position(
+                    symbol=position_data['symbol'],
+                    asset_type=position_data['asset_type'],
+                    entry_date=position_data['entry_date'],
+                    entry_price=position_data['entry_price'],
+                    quantity=position_data['quantity']
+                )
+                
+                QMessageBox.information(self, "Success", f"Position added successfully (ID: {position_id})")
+                self.refresh_positions()
+                
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to add position: {str(e)}")
+    
+    def _edit_position(self):
+        """Show dialog to edit the selected position."""
+        if not self.open_positions:
+            QMessageBox.warning(self, "Error", "Open Positions service not available")
+            return
+        
+        selected_rows = self.positions_table.selectionModel().selectedRows()
+        if not selected_rows:
+            QMessageBox.warning(self, "Warning", "Please select a position to edit")
+            return
+        
+        # Get position ID from the selected row
+        row = selected_rows[0].row()
+        position_id = int(self.positions_table.item(row, 0).text())
+        
+        # Get current position data
+        try:
+            position = self.open_positions.get_position(position_id)
+            if not position:
+                QMessageBox.warning(self, "Error", "Position not found")
+                return
+            
+            dialog = EditPositionDialog(position, self)
+            if dialog.exec() == QDialog.Accepted:
+                position_data = dialog.get_position_data()
+                
+                success = self.open_positions.update_position(
+                    position_id=position_id,
+                    symbol=position_data['symbol'],
+                    asset_type=position_data['asset_type'],
+                    entry_date=position_data['entry_date'],
+                    entry_price=position_data['entry_price'],
+                    quantity=position_data['quantity']
+                )
+                
+                if success:
+                    QMessageBox.information(self, "Success", "Position updated successfully")
+                    self.refresh_positions()
+                else:
+                    QMessageBox.warning(self, "Warning", "Position update failed")
+                    
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to edit position: {str(e)}")
+    
+    def _delete_position(self):
+        """Delete the selected position."""
+        if not self.open_positions:
+            QMessageBox.warning(self, "Error", "Open Positions service not available")
+            return
+        
+        selected_rows = self.positions_table.selectionModel().selectedRows()
+        if not selected_rows:
+            QMessageBox.warning(self, "Warning", "Please select a position to delete")
+            return
+        
+        # Get position info from the selected row
+        row = selected_rows[0].row()
+        position_id = int(self.positions_table.item(row, 0).text())
+        symbol = self.positions_table.item(row, 1).text()
+        
+        # Confirm deletion
+        reply = QMessageBox.question(
+            self, "Confirm Deletion",
+            f"Are you sure you want to delete the position for {symbol}?\n\n"
+            f"This action cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                success = self.open_positions.delete_position(position_id)
+                
+                if success:
+                    QMessageBox.information(self, "Success", f"Position {symbol} deleted successfully")
+                    self.refresh_positions()
+                else:
+                    QMessageBox.warning(self, "Warning", "Position deletion failed")
+                    
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to delete position: {str(e)}")
+
+
+# ==================== DIALOG CLASSES ====================
+
+class AddPositionDialog(QDialog):
+    """Dialog for adding a new position."""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Add New Position")
+        self.setModal(True)
+        self.resize(450, 350)
+        
+        # Center the dialog on parent
+        if parent:
+            parent_rect = parent.geometry()
+            x = parent_rect.x() + (parent_rect.width() - 450) // 2
+            y = parent_rect.y() + (parent_rect.height() - 350) // 2
+            self.move(x, y)
+        
+        self._setup_ui()
+    
+    def _setup_ui(self):
+        """Set up the dialog UI."""
+        layout = QVBoxLayout(self)
+        
+        # Form layout
+        form_layout = QFormLayout()
+        
+        # Symbol
+        self.symbol_edit = QLineEdit()
+        self.symbol_edit.setPlaceholderText("e.g., AAPL, BTC")
+        form_layout.addRow("Symbol:", self.symbol_edit)
+        
+        # Asset Type
+        self.asset_type_combo = QComboBox()
+        self.asset_type_combo.addItems(["stock", "crypto", "etf", "forex", "commodity", "bond", "option", "future"])
+        form_layout.addRow("Asset Type:", self.asset_type_combo)
+        
+        # Entry Date
+        self.entry_date_edit = QDateEdit()
+        self.entry_date_edit.setDate(datetime.now().date())
+        self.entry_date_edit.setCalendarPopup(True)
+        form_layout.addRow("Entry Date:", self.entry_date_edit)
+        
+        # Entry Price
+        self.entry_price_spin = QDoubleSpinBox()
+        self.entry_price_spin.setRange(0.01, 999999.99)
+        self.entry_price_spin.setDecimals(2)
+        self.entry_price_spin.setValue(100.00)
+        form_layout.addRow("Entry Price:", self.entry_price_spin)
+        
+        # Quantity
+        self.quantity_spin = QDoubleSpinBox()
+        self.quantity_spin.setRange(0.01, 999999.99)
+        self.quantity_spin.setDecimals(4)
+        self.quantity_spin.setValue(1.0)
+        form_layout.addRow("Quantity:", self.quantity_spin)
+        
+        layout.addLayout(form_layout)
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        
+        self.ok_btn = QPushButton("Add Position")
+        self.ok_btn.clicked.connect(self.accept)
+        button_layout.addWidget(self.ok_btn)
+        
+        self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn.clicked.connect(self.reject)
+        button_layout.addWidget(self.cancel_btn)
+        
+        layout.addLayout(button_layout)
+    
+    def get_position_data(self):
+        """Get the position data from the form."""
+        return {
+            'symbol': self.symbol_edit.text().strip().upper(),
+            'asset_type': self.asset_type_combo.currentText(),
+            'entry_date': self.entry_date_edit.date().toString('yyyy-MM-dd'),
+            'entry_price': self.entry_price_spin.value(),
+            'quantity': self.quantity_spin.value()
+        }
+    
+    def accept(self):
+        """Validate and accept the dialog."""
+        if not self.symbol_edit.text().strip():
+            QMessageBox.warning(self, "Validation Error", "Please enter a symbol")
+            return
+        
+        if self.entry_price_spin.value() <= 0:
+            QMessageBox.warning(self, "Validation Error", "Entry price must be greater than 0")
+            return
+        
+        if self.quantity_spin.value() <= 0:
+            QMessageBox.warning(self, "Validation Error", "Quantity must be greater than 0")
+            return
+        
+        super().accept()
+
+
+class EditPositionDialog(QDialog):
+    """Dialog for editing an existing position."""
+    
+    def __init__(self, position_data, parent=None):
+        super().__init__(parent)
+        self.position_data = position_data
+        self.setWindowTitle(f"Edit Position - {position_data['symbol']}")
+        self.setModal(True)
+        self.resize(450, 350)
+        
+        # Center the dialog on parent
+        if parent:
+            parent_rect = parent.geometry()
+            x = parent_rect.x() + (parent_rect.width() - 450) // 2
+            y = parent_rect.y() + (parent_rect.height() - 350) // 2
+            self.move(x, y)
+        
+        self._setup_ui()
+        self._populate_form()
+    
+    def _setup_ui(self):
+        """Set up the dialog UI."""
+        layout = QVBoxLayout(self)
+        
+        # Form layout
+        form_layout = QFormLayout()
+        
+        # Symbol
+        self.symbol_edit = QLineEdit()
+        form_layout.addRow("Symbol:", self.symbol_edit)
+        
+        # Asset Type
+        self.asset_type_combo = QComboBox()
+        self.asset_type_combo.addItems(["stock", "crypto", "etf", "forex", "commodity", "bond", "option", "future"])
+        form_layout.addRow("Asset Type:", self.asset_type_combo)
+        
+        # Entry Date
+        self.entry_date_edit = QDateEdit()
+        self.entry_date_edit.setCalendarPopup(True)
+        form_layout.addRow("Entry Date:", self.entry_date_edit)
+        
+        # Entry Price
+        self.entry_price_spin = QDoubleSpinBox()
+        self.entry_price_spin.setRange(0.01, 999999.99)
+        self.entry_price_spin.setDecimals(2)
+        form_layout.addRow("Entry Price:", self.entry_price_spin)
+        
+        # Quantity
+        self.quantity_spin = QDoubleSpinBox()
+        self.quantity_spin.setRange(0.01, 999999.99)
+        self.quantity_spin.setDecimals(4)
+        form_layout.addRow("Quantity:", self.quantity_spin)
+        
+        layout.addLayout(form_layout)
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        
+        self.ok_btn = QPushButton("Update Position")
+        self.ok_btn.clicked.connect(self.accept)
+        button_layout.addWidget(self.ok_btn)
+        
+        self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn.clicked.connect(self.reject)
+        button_layout.addWidget(self.cancel_btn)
+        
+        layout.addLayout(button_layout)
+    
+    def _populate_form(self):
+        """Populate the form with existing position data."""
+        self.symbol_edit.setText(self.position_data['symbol'])
+        
+        # Set asset type
+        index = self.asset_type_combo.findText(self.position_data['asset_type'])
+        if index >= 0:
+            self.asset_type_combo.setCurrentIndex(index)
+        
+        # Set entry date
+        entry_date = datetime.strptime(self.position_data['entry_date'], '%Y-%m-%d').date()
+        self.entry_date_edit.setDate(entry_date)
+        
+        # Set entry price and quantity
+        self.entry_price_spin.setValue(float(self.position_data['entry_price']))
+        self.quantity_spin.setValue(float(self.position_data['quantity']))
+    
+    def get_position_data(self):
+        """Get the updated position data from the form."""
+        return {
+            'symbol': self.symbol_edit.text().strip().upper(),
+            'asset_type': self.asset_type_combo.currentText(),
+            'entry_date': self.entry_date_edit.date().toString('yyyy-MM-dd'),
+            'entry_price': self.entry_price_spin.value(),
+            'quantity': self.quantity_spin.value()
+        }
+    
+    def accept(self):
+        """Validate and accept the dialog."""
+        if not self.symbol_edit.text().strip():
+            QMessageBox.warning(self, "Validation Error", "Please enter a symbol")
+            return
+        
+        if self.entry_price_spin.value() <= 0:
+            QMessageBox.warning(self, "Validation Error", "Entry price must be greater than 0")
+            return
+        
+        if self.quantity_spin.value() <= 0:
+            QMessageBox.warning(self, "Validation Error", "Quantity must be greater than 0")
+            return
+        
+        super().accept() 
